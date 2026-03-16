@@ -70,13 +70,13 @@ export interface ResponsesOutputItem {
   id: string
   role: "assistant"
   content: Array<ResponsesOutputContent>
-  status: "completed"
+  status: "completed" | "in_progress"
 }
 
 export interface ResponsesOutputContent {
   type: "output_text"
   text: string
-  annotations: []
+  annotations: Array<never>
 }
 
 // ---- 流式响应类型 ----
@@ -193,7 +193,7 @@ export function translateChatCompletionToResponses(
         content: [
           {
             type: "output_text",
-            text: typeof text === "string" ? text : "",
+            text: text,
             annotations: [],
           },
         ],
@@ -252,8 +252,7 @@ function emitStreamHeader(
         type: "message",
         id: streamState.itemId,
         role: "assistant",
-        status: "completed",
-        content: [],
+        status: "in_progress",
       },
     },
     {
@@ -350,6 +349,10 @@ export function translateChunkToResponsesEvents(
   const evts: Array<ResponsesStreamEvent> = []
   const choice = chunk.choices[0]
 
+  // chunk.choices may be empty (e.g. usage-only chunks); guard before access
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!choice) return evts
+
   if (!streamState.headerSent) {
     emitStreamHeader(evts, streamState)
   }
@@ -375,6 +378,8 @@ export function translateChunkToResponsesEvents(
 // ---- 调用 Copilot 上游（复用 chat/completions 接口） ----
 
 export const createResponses = async (payload: ResponsesPayload) => {
+  if (!state.copilotToken) throw new Error("Copilot token not found")
+
   const chatPayload = translateResponsesPayloadToChatCompletions(payload)
 
   const enableVision = false
