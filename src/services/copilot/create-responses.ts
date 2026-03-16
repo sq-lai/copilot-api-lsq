@@ -220,6 +220,7 @@ export interface ResponsesStreamState {
   createdAt: number
   headerSent: boolean
   textBuffer: string
+  finishSent: boolean
 }
 
 function emitStreamHeader(
@@ -270,6 +271,9 @@ function emitStreamFinish(
   streamState: ResponsesStreamState,
   chunk: ChatCompletionChunk,
 ): void {
+  if (streamState.finishSent) return
+  streamState.finishSent = true
+
   evts.push(
     {
       type: "response.output_text.done",

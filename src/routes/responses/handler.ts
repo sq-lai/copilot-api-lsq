@@ -52,23 +52,36 @@ export async function handleResponses(c: Context) {
       createdAt: Math.floor(Date.now() / 1000),
       headerSent: false,
       textBuffer: "",
+      finishSent: false,
     }
 
-    for await (const rawEvent of response) {
-      consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
+    try {
+      for await (const rawEvent of response) {
+        consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
 
-      if (rawEvent.data === "[DONE]") break
-      if (!rawEvent.data) continue
+        if (rawEvent.data === "[DONE]") break
+        if (!rawEvent.data) continue
 
-      const chunk = JSON.parse(rawEvent.data) as ChatCompletionChunk
-      const evts = translateChunkToResponsesEvents(chunk, streamState)
+        const chunk = JSON.parse(rawEvent.data) as ChatCompletionChunk
+        const evts = translateChunkToResponsesEvents(chunk, streamState)
 
-      for (const evt of evts) {
-        consola.debug("Translated Responses event:", JSON.stringify(evt))
-        await stream.writeSSE({
-          data: JSON.stringify(evt),
-        })
+        for (const evt of evts) {
+          consola.debug("Translated Responses event:", JSON.stringify(evt))
+          await stream.writeSSE({
+            event: evt.type,
+            data: JSON.stringify(evt),
+          })
+        }
       }
+    } catch (error) {
+      consola.error("Streaming error:", error)
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: "error",
+          code: "stream_error",
+          message: "An unexpected error occurred during streaming.",
+        }),
+      })
     }
   })
 }
