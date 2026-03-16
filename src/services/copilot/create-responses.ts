@@ -379,27 +379,20 @@ export function translateChunkToResponsesEvents(
   return evts
 }
 
-// ---- 调用 Copilot 上游（复用 chat/completions 接口） ----
+// ---- 直接透传到 Copilot 后端的 /responses 端点 ----
 
 export const createResponses = async (payload: ResponsesPayload) => {
   if (!state.copilotToken) throw new Error("Copilot token not found")
 
-  const chatPayload = translateResponsesPayloadToChatCompletions(payload)
-
-  const enableVision = false
-  const isAgentCall = chatPayload.messages.some((msg) =>
-    ["assistant", "tool"].includes(msg.role),
-  )
-
   const headers: Record<string, string> = {
-    ...copilotHeaders(state, enableVision),
-    "X-Initiator": isAgentCall ? "agent" : "user",
+    ...copilotHeaders(state, false),
+    "X-Initiator": "user",
   }
 
-  const response = await fetch(`${copilotBaseUrl(state)}/chat/completions`, {
+  const response = await fetch(`${copilotBaseUrl(state)}/responses`, {
     method: "POST",
     headers,
-    body: JSON.stringify(chatPayload),
+    body: JSON.stringify(payload),
   })
 
   if (!response.ok) {
@@ -407,9 +400,9 @@ export const createResponses = async (payload: ResponsesPayload) => {
     throw new HTTPError("Failed to create responses", response)
   }
 
-  if (chatPayload.stream) {
+  if (payload.stream) {
     return events(response)
   }
 
-  return (await response.json()) as ChatCompletionResponse
+  return (await response.json()) as ResponsesResponse
 }
